@@ -1,0 +1,30 @@
+# ModelSim
+work/
+transcript
+*.wlf
+*.mpf
+
+# Vivado
+.Xil/
+*.jou
+*.log
+*.str
+*.pb
+*.cache/
+*.hw/
+*.runs/
+*.sim/
+*.gen/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Editor files
+.vscode/
+.idea/
