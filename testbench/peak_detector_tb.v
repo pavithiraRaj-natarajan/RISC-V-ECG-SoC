@@ -2,148 +2,111 @@
 
 module peak_detector_tb;
 
-reg clk;
-reg resetn;
+    localparam integer NUM_SAMPLES = 1000;
+    localparam integer SAMPLE_RATE = 100;
+    localparam [31:0] SAMPLE_ADDR    = 32'h10000300;
+    localparam [31:0] THRESHOLD_ADDR = 32'h10000304;
+    localparam [31:0] START_ADDR     = 32'h10000308;
+    localparam [31:0] PEAK_ADDR      = 32'h1000030C;
+    localparam [31:0] RR_ADDR        = 32'h10000310;
+    localparam [31:0] BPM_ADDR       = 32'h10000314;
 
-reg        wr_en;
-reg        rd_en;
-reg [31:0] addr;
-reg [31:0] wdata;
+    reg clk = 0;
+    reg resetn = 0;
+    reg wr_en = 0;
+    reg rd_en = 0;
+    reg [31:0] addr = 0;
+    reg [31:0] wdata = 0;
+    wire [31:0] rdata;
 
-wire [31:0] rdata;
+    reg [31:0] ecg_samples [0:NUM_SAMPLES-1];
+    reg [31:0] read_value;
+    integer i;
+    integer detected_count;
 
+    peak_detector #(.SAMPLE_RATE(SAMPLE_RATE)) dut (
+        .clk(clk),
+        .resetn(resetn),
+        .wr_en(wr_en),
+        .rd_en(rd_en),
+        .addr(addr),
+        .wdata(wdata),
+        .rdata(rdata)
+    );
 
-peak_detector dut (
-    .clk(clk),
-    .resetn(resetn),
-    .wr_en(wr_en),
-    .rd_en(rd_en),
-    .addr(addr),
-    .wdata(wdata),
-    .rdata(rdata)
-);
+    always #5 clk = ~clk;
 
+    task write_reg;
+        input [31:0] a;
+        input [31:0] d;
+        begin
+            @(negedge clk);
+            addr = a;
+            wdata = d;
+            wr_en = 1;
+            @(negedge clk);
+            wr_en = 0;
+            addr = 0;
+            wdata = 0;
+        end
+    endtask
 
-// Clock: 10 ns
-always #5 clk = ~clk;
+    task read_reg;
+        input [31:0] a;
+        output [31:0] d;
+        begin
+            @(negedge clk);
+            addr = a;
+            rd_en = 1;
+            #1 d = rdata;
+            @(negedge clk);
+            rd_en = 0;
+            addr = 0;
+        end
+    endtask
 
+    initial begin
+        $display("==========================================");
+        $display(" Standalone ECG Peak Detector Test");
+        $display(" Sample rate = %0d Hz; expected BPM = 75", SAMPLE_RATE);
+        $display(" Threshold = 320 (four-sample FIR sum)");
+        $display("==========================================");
 
-initial begin
+        $readmemh("TB/synthetic_fir_samples.mem", ecg_samples);
 
-    clk     = 0;
-    resetn  = 0;
-    wr_en   = 0;
-    rd_en   = 0;
-    addr    = 0;
-    wdata   = 0;
+        repeat (4) @(negedge clk);
+        resetn = 1;
 
-    #20;
-    resetn = 1;
+        write_reg(THRESHOLD_ADDR, 32'd320);
+        detected_count = 0;
 
+        for (i = 0; i < NUM_SAMPLES; i = i + 1) begin
+            write_reg(SAMPLE_ADDR, ecg_samples[i]);
+            write_reg(START_ADDR, 32'd1);
 
-    // ------------------------------------------------
-    // Set threshold = 100
-    // ------------------------------------------------
+            if (dut.peak_detected) begin
+                detected_count = detected_count + 1;
+                $display("Peak %0d at sample index %0d, FIR value=%0d",
+                         detected_count, i, ecg_samples[i]);
+            end
+        end
 
-    @(negedge clk);
-    wr_en = 1;
-    addr  = 32'h10000304;
-    wdata = 32'd100;
+        read_reg(RR_ADDR, read_value);
+        $display("Final RR interval = %0d samples (expected 80)", read_value);
 
-    @(negedge clk);
-    wr_en = 0;
+        read_reg(BPM_ADDR, read_value);
+        $display("Calculated BPM = %0d (expected 75)", read_value);
 
+        $display("Detected peaks = %0d (expected 13)", detected_count);
 
-    // ------------------------------------------------
-    // FIRST PEAK
-    // Sample = 285
-    // ------------------------------------------------
+        if (read_value == 75 && detected_count == 13) begin
+            $display("PEAK DETECTOR TEST: PASS");
+        end else begin
+            $display("PEAK DETECTOR TEST: FAIL");
+        end
 
-    @(negedge clk);
-    wr_en = 1;
-    addr  = 32'h10000300;
-    wdata = 32'd285;
-
-    @(negedge clk);
-    wr_en = 0;
-
-
-    // Start detection
-    @(negedge clk);
-    wr_en = 1;
-    addr  = 32'h10000308;
-    wdata = 32'd1;
-
-    @(negedge clk);
-    wr_en = 0;
-
-
-    // ------------------------------------------------
-    // Wait 5 sample cycles
-    // ------------------------------------------------
-
-    repeat(5)
-        @(negedge clk);
-
-
-    // ------------------------------------------------
-    // SECOND PEAK
-    // Sample = 300
-    // ------------------------------------------------
-
-    @(negedge clk);
-    wr_en = 1;
-    addr  = 32'h10000300;
-    wdata = 32'd300;
-
-    @(negedge clk);
-    wr_en = 0;
-
-
-    // Start detection
-    @(negedge clk);
-    wr_en = 1;
-    addr  = 32'h10000308;
-    wdata = 32'd1;
-
-    @(negedge clk);
-    wr_en = 0;
-
-
-    // ------------------------------------------------
-    // Read peak result
-    // ------------------------------------------------
-
-    @(negedge clk);
-    rd_en = 1;
-    addr  = 32'h1000030C;
-
-    #1;
-
-    $display("PEAK RESULT = %h", rdata);
-
-    rd_en = 0;
-
-
-    // ------------------------------------------------
-    // Read R-R interval
-    // ------------------------------------------------
-
-    @(negedge clk);
-    rd_en = 1;
-    addr  = 32'h10000310;
-
-    #1;
-
-    $display("RR INTERVAL = %0d CLOCK CYCLES", rdata);
-
-    rd_en = 0;
-
-
-    #20;
-
-    $finish;
-
-end
+        $display("NOTE: synthetic signal validation only; not medical use.");
+        $finish;
+    end
 
 endmodule
