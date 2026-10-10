@@ -1,138 +1,99 @@
-module peak_detector (
-    input wire clk,
-    input wire resetn,
+`timescale 1ns/1ps
 
-    input wire        wr_en,
-    input wire        rd_en,
-    input wire [31:0] addr,
-    input wire [31:0] wdata,
-    output reg [31:0] rdata
+module peak_detector #(
+    parameter integer SAMPLE_RATE = 100
+) (
+    input  wire        clk,
+    input  wire        resetn,
+    input  wire        wr_en,
+    input  wire        rd_en,
+    input  wire [31:0] addr,
+    input  wire [31:0] wdata,
+    output reg  [31:0] rdata
 );
 
-reg [31:0] sample;
-reg [31:0] threshold;
+    localparam [31:0] SAMPLE_ADDR    = 32'h10000300;
+    localparam [31:0] THRESHOLD_ADDR = 32'h10000304;
+    localparam [31:0] START_ADDR     = 32'h10000308;
+    localparam [31:0] PEAK_ADDR      = 32'h1000030C;
+    localparam [31:0] RR_ADDR        = 32'h10000310;
+    localparam [31:0] BPM_ADDR       = 32'h10000314;
 
-reg        peak_detected;
-reg        first_peak_seen;
+    reg [31:0] sample;
+    reg [31:0] threshold;
+    reg peak_detected;
+    reg first_peak_seen;
+    reg above_threshold;
+    reg [31:0] sample_counter;
+    reg [31:0] rr_interval;
+    reg [31:0] heart_rate;
 
-reg [31:0] sample_counter;
-reg [31:0] rr_interval;
-reg [31:0] heart_rate;
-
-
-// ECG sample rate = 250 Hz
-// HR = (60 * 250) / RR
-// HR = 15000 / RR
-
-always @(posedge clk) begin
-
-    if (!resetn) begin
-
-        sample          <= 32'd0;
-        threshold       <= 32'd100;
-        peak_detected   <= 1'b0;
-
-        first_peak_seen <= 1'b0;
-        sample_counter  <= 32'd0;
-        rr_interval     <= 32'd0;
-        heart_rate      <= 32'd0;
-
-    end
-
-    else begin
-
-        // Count elapsed sample periods
-        if (first_peak_seen)
-            sample_counter <= sample_counter + 1'b1;
-
-
-        if (wr_en) begin
-
+    always @(posedge clk) begin
+        if (!resetn) begin
+            sample          <= 0;
+            threshold       <= 32'd320;
+            peak_detected   <= 0;
+            first_peak_seen <= 0;
+            above_threshold <= 0;
+            sample_counter  <= 0;
+            rr_interval     <= 0;
+            heart_rate      <= 0;
+        end else if (wr_en) begin
             case (addr)
-
-                // ECG sample
-                32'h10000300:
+                SAMPLE_ADDR: begin
                     sample <= wdata;
-
-                // Threshold
-                32'h10000304:
-                    threshold <= wdata;
-
-                // Start peak detection
-                32'h10000308: begin
-
-                    if (wdata != 0) begin
-
-                        peak_detected <= (sample > threshold);
-
-                        if (sample > threshold) begin
-
-                            // First peak
-                            if (!first_peak_seen) begin
-
-                                first_peak_seen <= 1'b1;
-                                sample_counter  <= 32'd0;
-
-                            end
-
-                            // Second/subsequent peak
-                            else begin
-
-                                rr_interval    <= sample_counter;
-
-                                // Heart rate = 15000 / RR
-                                if (sample_counter != 0)
-                                    heart_rate <= 32'd15000 / sample_counter;
-                                else
-                                    heart_rate <= 32'd0;
-
-                                sample_counter <= 32'd0;
-
-                            end
-
-                        end
-
-                    end
-
                 end
 
+                THRESHOLD_ADDR: begin
+                    threshold <= wdata;
+                end
+
+                START_ADDR: begin
+                    if (wdata != 0) begin
+                        peak_detected <= 0;
+
+                        // Count processed ECG samples, not FPGA clock cycles.
+                        if (first_peak_seen)
+                            sample_counter <= sample_counter + 1;
+
+                        // Rising threshold crossing: one event per excursion.
+                        if ((sample > threshold) && !above_threshold) begin
+                            peak_detected <= 1;
+
+                            if (!first_peak_seen) begin
+                                first_peak_seen <= 1;
+                                sample_counter <= 0;
+                            end else begin
+                                rr_interval <= sample_counter + 1;
+                                if ((sample_counter + 1) != 0)
+                                    heart_rate <= (60 * SAMPLE_RATE) /
+                                                  (sample_counter + 1);
+                                else
+                                    heart_rate <= 0;
+                                sample_counter <= 0;
+                            end
+                        end
+
+                        above_threshold <= (sample > threshold);
+                    end
+                end
+
+                default: begin
+                end
             endcase
-
         end
-
     end
 
-end
-
-
-// Read registers
-always @(*) begin
-
-    rdata = 32'd0;
-
-    if (rd_en) begin
-
-        case (addr)
-
-            // Peak result
-            32'h1000030C:
-                rdata = {31'd0, peak_detected};
-
-            // R-R interval
-            32'h10000310:
-                rdata = rr_interval;
-
-            // Heart rate
-            32'h10000314:
-                rdata = heart_rate;
-
-            default:
-                rdata = 32'd0;
-
-        endcase
-
+    always @(*) begin
+        rdata = 32'd0;
+        if (rd_en) begin
+            case (addr)
+                PEAK_ADDR: rdata = {31'd0, peak_detected};
+                RR_ADDR:   rdata = rr_interval;
+                BPM_ADDR:  rdata = heart_rate;
+                default:   rdata = 32'd0;
+            endcase
+        end
     end
-
-end
 
 endmodule
