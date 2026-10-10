@@ -38,7 +38,7 @@ module soc_tb;
     // The file must be present at E:/pico/TB/synthetic_fir_samples.mem.
     // It contains the 1000 raw 8-bit synthetic ECG samples in hexadecimal.
     initial begin
-        $readmemh("TB/synthetic_fir_samples.mem", ecg_samples);
+        $readmemh("synthetic_fir_samples.mem", ecg_samples);
     end
 
     // Reset and counters
