@@ -8,244 +8,77 @@ module rom (
     integer i;
 
     initial begin
-
-        // ------------------------------------------------
-        // Initialize ROM with NOP
-        // ------------------------------------------------
-
         for (i = 0; i < 256; i = i + 1)
-            memory[i] = 32'h00000013;
-
-
-        // ================================================================
-        // FIR BASE ADDRESS
-        // x1 = 0x10000200
-        // ================================================================
-
-        memory[0] = 32'h100000B7;   // lui  x1,0x10000
-        memory[1] = 32'h20008093;   // addi x1,x1,0x200
-
-
-        // ================================================================
-        // WINDOW 1
-        // FIR RESULT = 57
-        // ================================================================
-
-        memory[2]  = 32'h00A00113;   // x2 = 10
-        memory[3]  = 32'h0020A023;   // FIR x0 = 10
-
-        memory[4]  = 32'h00C00113;   // x2 = 12
-        memory[5]  = 32'h0020A223;   // FIR x1 = 12
-
-        memory[6]  = 32'h00F00113;   // x2 = 15
-        memory[7]  = 32'h0020A423;   // FIR x2 = 15
-
-        memory[8]  = 32'h01400113;   // x2 = 20
-        memory[9]  = 32'h0020A623;   // FIR x3 = 20
-
-
-        // h0 = 1
-        memory[10] = 32'h00100113;
-        memory[11] = 32'h0020A823;
-
-        // h1 = 1
-        memory[12] = 32'h00100113;
-        memory[13] = 32'h0020AA23;
-
-        // h2 = 1
-        memory[14] = 32'h00100113;
-        memory[15] = 32'h0020AC23;
-
-        // h3 = 1
-        memory[16] = 32'h00100113;
-        memory[17] = 32'h0020AE23;
-
-
-        // START FIR
-        memory[18] = 32'h00002113;
-        memory[19] = 32'h0220A023;
-
-
-        // Read FIR RESULT
-        // x3 = 57
-        memory[20] = 32'h0240A183;
-
-
-        // ================================================================
-        // PEAK DETECTOR BASE
-        // x4 = 0x10000300
-        // ================================================================
-
-        memory[21] = 32'h10000237;
-        memory[22] = 32'h30020213;
-
-
-        // Send FIR result to SAMPLE
-        memory[23] = 32'h00322023;
-
-
-        // Threshold = 100
-        memory[24] = 32'h06400113;
-        memory[25] = 32'h00222223;
-
-
-        // START peak detection
-        memory[26] = 32'h00100113;
-        memory[27] = 32'h00222423;
-
-
-        // Read PEAK RESULT
-        // x6 = peak flag
-        memory[28] = 32'h00C22303;
-
-
-        // ================================================================
-        // RAM BASE
-        // x5 = 0x00001000
-        // ================================================================
-
-        memory[29] = 32'h000012B7;
-
-
-        // Store FIR result 57
-        memory[30] = 32'h0032A023;
-
-
-        // ================================================================
-        // WINDOW 2
-        // FIR RESULT = 285
-        // ================================================================
-
-        memory[31] = 32'h01400113;
-        memory[32] = 32'h0020A023;
-
-        memory[33] = 32'h02300113;
-        memory[34] = 32'h0020A223;
-
-        memory[35] = 32'h05000113;
-        memory[36] = 32'h0020A423;
-
-        memory[37] = 32'h09600113;
-        memory[38] = 32'h0020A623;
-
-
-        // h0 = 1
-        memory[39] = 32'h00100113;
-        memory[40] = 32'h0020A823;
-
-        // h1 = 1
-        memory[41] = 32'h00100113;
-        memory[42] = 32'h0020AA23;
-
-        // h2 = 1
-        memory[43] = 32'h00100113;
-        memory[44] = 32'h0020AC23;
-
-        // h3 = 1
-        memory[45] = 32'h00100113;
-        memory[46] = 32'h0020AE23;
-
-
-        // START FIR
-        memory[47] = 32'h00100113;
-        memory[48] = 32'h0220A023;
-
-
-        // Read FIR RESULT
-        // x3 = 285
-        memory[49] = 32'h0240A183;
-
-
-        // ================================================================
-        // SEND FIR RESULT TO PEAK DETECTOR
-        // ================================================================
-        // ================================================================
-        // FIRST PEAK
-        // FIR RESULT = 285
-        // ================================================================
-
-        memory[50] = 32'h00322023;   // sample = 285
-
-        // START PEAK DETECTOR
-        memory[51] = 32'h00100113;   // x2 = 1
-        memory[52] = 32'h00222423;   // START
-
-
-        // ================================================================
-        // WAIT
-        // ================================================================
-
-        memory[53] = 32'h00100113;   // x2 = 1
-        memory[54] = 32'h00100113;
-        memory[55] = 32'h00100113;
-        memory[56] = 32'h00100113;
-        memory[57] = 32'h00100113;
-
-
-        // ================================================================
-        // SECOND PEAK
-        // SAMPLE = 300
-        // ================================================================
-
-        memory[58] = 32'h12C00113;   // x2 = 300
-        memory[59] = 32'h00222023;   // sw x2,0(x4)
-
-
-        // START PEAK DETECTOR
-        memory[60] = 32'h00100113;   // x2 = 1
-        memory[61] = 32'h00222423;   // START
-
-
-        // ================================================================
-        // READ RR INTERVAL
-        // 0x10000310
-        // ================================================================
-
-        memory[62] = 32'h01022303;   // lw x6,16(x4)
-
-
-        // Store RR interval at RAM 0x1008
-
-        memory[63] = 32'h0062A423;   // sw x6,8(x5)
-
-
-        // ================================================================
-        // READ HEART RATE
-        // 0x10000314
-        // ================================================================
-
-        memory[64] = 32'h01422303;   // lw x6,20(x4)
-
-
-        // Store heart rate at RAM 0x100C
-
-        memory[65] = 32'h0062A623;   // sw x6,12(x5)
-
-
-        // ================================================================
-        // END
-        // ================================================================
-
-        memory[66] = 32'h0000006F;   // Infinite loop
-// ================================================================
-// UART TRANSMISSION TEST: SEND CHARACTER 'A'
-// UART DATA ADDRESS = 0x10000000
-// ================================================================
-
-memory[66] = 32'h100003B7;  // lui   x7, 0x10000
-memory[67] = 32'h00038393;  // addi  x7, x7, 0
-memory[68] = 32'h04100113;  // addi  x2, x0, 65 ('A')
-memory[69] = 32'h0023A023;  // sw    x2, 0(x7) — UART transmit
-
-memory[70] = 32'h0000006F;  // jal x0, 0 — infinite loop
-       
-
+            memory[i] = 32'h00000013; // NOP
+
+        // Peripheral base addresses
+        memory[0]  = 32'h100003B7; // lui   x7,0x10000       UART base
+        memory[1]  = 32'h00838413; // addi  x8,x7,8          UART RX status
+        memory[2]  = 32'h100004B7; // lui   x9,0x10000
+        memory[3]  = 32'h20048493; // addi  x9,x9,0x200      FIR base
+        memory[4]  = 32'h10000537; // lui   x10,0x10000
+        memory[5]  = 32'h30050513; // addi  x10,x10,0x300    Peak detector base
+
+        // Constants
+        memory[6]  = 32'h00100293; // addi x5,x0,1
+        memory[7]  = 32'h00000313; // addi x6,x0,0 (unused, retained)
+
+        // FIR coefficients = 1
+        memory[8]  = 32'h0054A823; // sw x5,16(x9)
+        memory[9]  = 32'h0054AA23; // sw x5,20(x9)
+        memory[10] = 32'h0054AC23; // sw x5,24(x9)
+        memory[11] = 32'h0054AE23; // sw x5,28(x9)
+
+        // Initialize rolling FIR sample window
+        memory[12] = 32'h00000593; // addi x11,x0,0
+        memory[13] = 32'h00000613; // addi x12,x0,0
+        memory[14] = 32'h00000693; // addi x13,x0,0
+        memory[15] = 32'h00000713; // addi x14,x0,0
+
+        // Peak threshold = 320
+        memory[16] = 32'h14000893; // addi x17,x0,320
+        memory[17] = 32'h01152223; // sw x17,4(x10)
+
+        // Sample counter and target count (1000 samples)
+        memory[18] = 32'h00000913; // addi x18,x0,0
+        memory[19] = 32'h3E800993; // addi x19,x0,1000
+
+        // UART polling loop (PC = 0x50)
+        memory[20] = 32'h00042783; // lw x15,0(x8)
+        memory[21] = 32'hFE078EE3; // beq x15,x0,memory[20]
+
+        // Read one UART ECG sample
+        memory[22] = 32'h0003A803; // lw x16,0(x7)
+
+        // Shift rolling sample window
+        memory[23] = 32'h00068713; // addi x14,x13,0
+        memory[24] = 32'h00060693; // addi x13,x12,0
+        memory[25] = 32'h00058613; // addi x12,x11,0
+        memory[26] = 32'h00080593; // addi x11,x16,0
+
+        // Write FIR input samples
+        memory[27] = 32'h00B4A023; // sw x11,0(x9)
+        memory[28] = 32'h00C4A223; // sw x12,4(x9)
+        memory[29] = 32'h00D4A423; // sw x13,8(x9)
+        memory[30] = 32'h00E4A623; // sw x14,12(x9)
+
+        // Start FIR and read its result
+        memory[31] = 32'h0254A023; // sw x5,32(x9)
+        memory[32] = 32'h0244A883; // lw x17,36(x9)
+
+        // Send FIR result to peak detector
+        memory[33] = 32'h01152023; // sw x17,0(x10)
+        memory[34] = 32'h00552423; // sw x5,8(x10)
+
+        // Count processed samples; continue until 1000 samples
+        memory[35] = 32'h00190913; // addi x18,x18,1
+        memory[36] = 32'hFD3940E3; // blt x18,x19,PC 0x50 (UART poll)
+
+        // After sample 1000, read BPM and transmit its low byte
+        memory[37] = 32'h01452883; // lw x17,20(x10) = BPM register
+        memory[38] = 32'h0113A023; // sw x17,0(x7) = UART TX
+        memory[39] = 32'h0000006F; // jal x0,0 (halt in a self-loop)
     end
-
-
-    // ================================================================
-    // COMBINATIONAL ROM
-    // ================================================================
 
     always @(*) begin
         rdata = memory[addr[9:2]];
