@@ -6,7 +6,9 @@ module soc (
     input wire ser_rx
 );
 
+    // ==========================================
     // MEMORY BUS
+    // ==========================================
     wire        mem_valid;
     wire        mem_instr;
     wire        mem_ready;
@@ -15,14 +17,14 @@ module soc (
     wire [3:0]  mem_wstrb;
     wire [31:0] mem_rdata;
 
-    // LOOK-AHEAD MEMORY BUS
+    // Look-ahead memory bus
     wire        mem_la_read;
     wire        mem_la_write;
     wire [31:0] mem_la_addr;
     wire [31:0] mem_la_wdata;
     wire [3:0]  mem_la_wstrb;
 
-    // PICORV32 PCPI
+    // PCPI interface
     wire        pcpi_valid;
     wire [31:0] pcpi_insn;
     wire [31:0] pcpi_rs1;
@@ -34,11 +36,11 @@ module soc (
     wire        pcpi_ready;
 
     assign pcpi_wr    = 1'b0;
-    assign pcpi_rd    = 32'h00000000;
+    assign pcpi_rd    = 32'd0;
     assign pcpi_wait  = 1'b0;
     assign pcpi_ready = 1'b0;
 
-    // IRQ / TRACE
+    // IRQ and trace
     wire [31:0] irq;
     wire [31:0] eoi;
     wire        trap;
@@ -47,7 +49,9 @@ module soc (
 
     assign irq = 32'd0;
 
-    // PICORV32 PROCESSOR
+    // ==========================================
+    // PICORV32 CPU
+    // ==========================================
     picorv32 cpu (
         .clk(clk),
         .resetn(resetn),
@@ -84,38 +88,42 @@ module soc (
         .trace_data(trace_data)
     );
 
+    // ==========================================
     // ADDRESS DECODING
-
+    // ==========================================
     wire rom_select;
-    assign rom_select =
-        mem_valid && (mem_addr < 32'h00000400);
-
     wire ram_select;
+    wire uart_select;
+    wire fir_select;
+    wire peak_select;
+
+    assign rom_select =
+        mem_valid &&
+        (mem_addr < 32'h00000400);
+
     assign ram_select =
         mem_valid &&
         (mem_addr >= 32'h00001000) &&
         (mem_addr < 32'h00001400);
 
-    // UART: DATA, DIVIDER, STATUS
-    wire uart_select;
     assign uart_select =
         mem_valid &&
         (mem_addr >= 32'h10000000) &&
         (mem_addr < 32'h1000000C);
 
-    wire fir_select;
     assign fir_select =
         mem_valid &&
         (mem_addr >= 32'h10000200) &&
         (mem_addr < 32'h10000228);
 
-    wire peak_select;
     assign peak_select =
         mem_valid &&
         (mem_addr >= 32'h10000300) &&
         (mem_addr < 32'h10000318);
 
+    // ==========================================
     // ROM
+    // ==========================================
     wire [31:0] rom_rdata;
 
     rom rom_inst (
@@ -124,7 +132,9 @@ module soc (
         .rdata(rom_rdata)
     );
 
+    // ==========================================
     // RAM
+    // ==========================================
     wire [31:0] ram_rdata;
 
     ram ram_inst (
@@ -136,10 +146,11 @@ module soc (
         .rdata(ram_rdata)
     );
 
+    // ==========================================
     // UART
+    // ==========================================
     wire [31:0] uart_rdata;
     wire        uart_wait;
-
     wire [31:0] uart_div_do;
     wire [31:0] uart_dat_do;
     wire        uart_rx_valid;
@@ -152,7 +163,8 @@ module soc (
         .ser_rx(ser_rx),
 
         .reg_div_we(
-            uart_select && (mem_addr == 32'h10000004)
+            uart_select &&
+            (mem_addr == 32'h10000004)
             ? mem_wstrb : 4'b0000
         ),
         .reg_div_di(mem_wdata),
@@ -167,27 +179,30 @@ module soc (
         .reg_dat_re(
             uart_select &&
             (mem_addr == 32'h10000000) &&
-            (mem_wstrb == 4'b0000)
+            (mem_wstrb == 4'b0000) &&
+            mem_valid &&
+            mem_ready
         ),
 
         .reg_dat_di(mem_wdata),
         .reg_dat_do(uart_dat_do),
         .reg_dat_wait(uart_wait),
-
-        // NEW: receive-buffer-valid status
         .reg_dat_valid(uart_rx_valid)
     );
 
     wire [31:0] uart_status;
+
     assign uart_status = {31'b0, uart_rx_valid};
 
     assign uart_rdata =
         (mem_addr == 32'h10000004) ? uart_div_do :
         (mem_addr == 32'h10000000) ? uart_dat_do :
         (mem_addr == 32'h10000008) ? uart_status :
-        32'h00000000;
+        32'd0;
 
+    // ==========================================
     // FIR ACCELERATOR
+    // ==========================================
     wire [31:0] fir_rdata;
 
     fir_accel fir_inst (
@@ -202,7 +217,9 @@ module soc (
         .rdata(fir_rdata)
     );
 
+    // ==========================================
     // PEAK DETECTOR
+    // ==========================================
     wire [31:0] peak_rdata;
 
     peak_detector peak_inst (
@@ -217,23 +234,28 @@ module soc (
         .rdata(peak_rdata)
     );
 
-    // READ DATA MULTIPLEXER
+    // ==========================================
+    // READ-DATA MULTIPLEXER
+    // ==========================================
     assign mem_rdata =
         rom_select  ? rom_rdata  :
         ram_select  ? ram_rdata  :
         uart_select ? uart_rdata :
         fir_select  ? fir_rdata  :
         peak_select ? peak_rdata :
-        32'h00000000;
+        32'd0;
 
+    // ==========================================
     // MEMORY READY
+    // ==========================================
+    // Hold UART data writes until the transmitter is idle.
     assign mem_ready =
         mem_valid &&
         (
-            rom_select  ||
-            ram_select  ||
-            uart_select ||
-            fir_select  ||
+            rom_select ||
+            ram_select ||
+            (uart_select && !uart_wait) ||
+            fir_select ||
             peak_select
         );
 
